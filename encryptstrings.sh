@@ -2,65 +2,53 @@
 
 echo "Script started"
 
-# Function to encrypt JSON files using jsoncrypt
+# Function to encrypt all lines in files, grouping 5 lines at a time
 encrypt_strings() {
   local password="$1"
-  find . -type f -name "*.json" -not -path '*/\.git/*' -not -name "$(basename "$0")" | while IFS= read -r file; do
+  find . -type f -not -path '*/\.git*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
     echo "Encrypting $file"
-    python3 -c "
-import sys
-from jsoncrypt import Encrypt
+    
+    # Create a temporary file to store the results
+    > "$file.tmp"
+    
+    buffer=""
+    line_count=0
 
-filename = '$file'
-password = '$password'
+    while IFS= read -r line; do
+      buffer+="$line"$'\n'
+      ((line_count++))
 
-if Encrypt.jsonfile(filename, save_file=True, password=password):
-    print(f'File {filename} was successfully encrypted and has been saved!')
-else:
-    print(f'Failed to encrypt file {filename}')
-"
+      if (( line_count == 5 )); then
+        encrypted_text=$(echo -n "$buffer" | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2 | tr -d '\n')
+        echo "$encrypted_text" >> "$file.tmp"
+        buffer=""
+        line_count=0
+      fi
+    done < "$file"
+
+    # Encrypt any remaining lines in the buffer
+    if [ -n "$buffer" ]; then
+      encrypted_text=$(echo -n "$buffer" | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2 | tr -d '\n')
+      echo "$encrypted_text" >> "$file.tmp"
+    fi
+    
+    # Replace the original file with the encrypted content
+    mv "$file.tmp" "$file"
   done
 }
 
-# Function to decrypt JSON files using jsoncrypt
+# Function to decrypt all lines in files, grouping 5 lines at a time
 decrypt_strings() {
   local password="$1"
-  find . -type f -name "*.json" -not -path '*/\.git/*' -not -name "$(basename "$0")" | while IFS= read -r file; do
-    echo "Decrypting $file"
-    python3 -c "
-import sys
-from jsoncrypt import Decrypt
-
-filename = '$file'
-password = '$password'
-
-if Decrypt.jsonfile(filename, save_file=True, password=password):
-    print(f'File {filename} was successfully decrypted and has been saved!')
-else:
-    print(f'File {filename} is not encrypted or it was modified')
-"
-  done
-}
-
-
-# Function to decrypt text between quotes in files using Base64 decoding
-decrypt_strings() {
-  local password="$1"
-  find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
+  find . -type f -not -path '*/\.git*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
     echo "Decrypting $file"
     
     # Create a temporary file to store the results
     > "$file.tmp"
     
     while IFS= read -r line; do
-      # Decrypt text inside single quotes
-      decrypted_line=$(echo "$line" | sed -E "s/'([A-Za-z0-9+/=]+)'/'$(echo -n \1 | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)'/")
-      
-      # Decrypt text inside double quotes
-      decrypted_line=$(echo "$decrypted_line" | sed -E 's/"([A-Za-z0-9+/=]+)"/"$(echo -n \1 | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)"/')
-      
-      # Write the decrypted line to the temporary file
-      echo "$decrypted_line" >> "$file.tmp"
+      decrypted_text=$(echo -n "$line" | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)
+      echo "$decrypted_text" >> "$file.tmp"
     done < "$file"
     
     # Replace the original file with the decrypted content
@@ -68,17 +56,16 @@ decrypt_strings() {
   done
 }
 
-
 # Parse command-line arguments
 commit_message="Encrypted strings in files"
 decrypt_only=false
 no_git=false
-while getopts "m:dng" opt; do
+while getopts "m:d:n" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
     d) decrypt_only=true ;;
     n) no_git=true ;;
-    *) echo "Usage: $0 [-m commit_message] [-d] [-ng]"; exit 1 ;;
+    *) echo "Usage: $0 [-m commit_message] [-d] [-n]"; exit 1 ;;
   esac
 done
 
