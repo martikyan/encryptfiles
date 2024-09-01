@@ -5,29 +5,54 @@ echo "Script started"
 # Function to encrypt text between quotes in files using Base64 encoding
 encrypt_strings() {
   local password="$1"
-  find . -type f -not -path '*/\.git/*' -not -path '*.sh' | while IFS= read -r file; do
+  find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
     echo "Encrypting $file"
+    
+    # Create a temporary file to store the results
+    > "$file.tmp"
+    
     while IFS= read -r line; do
-      echo "Processing line: $line"
-      encrypted=$(echo "$line" | sed -E "s/(['\"])([^'\"]*)(\1)/\1$(echo -n \2 | openssl enc -aes-256-cbc -a -salt -pass pass:$password)\3/g")
-      echo "$encrypted" >> "$file.tmp";
+      # Encrypt text inside single quotes
+      encrypted_line=$(echo "$line" | sed -E "s/'([^']*)'/'$(echo -n \1 | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2)'/")
+      
+      # Encrypt text inside double quotes
+      encrypted_line=$(echo "$encrypted_line" | sed -E 's/"([^"]*)"/"$(echo -n \1 | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2)"/')
+      
+      # Write the encrypted line to the temporary file
+      echo "$encrypted_line" >> "$file.tmp"
     done < "$file"
+    
+    # Replace the original file with the encrypted content
     mv "$file.tmp" "$file"
   done
 }
 
-# Function to decrypt text between quotes in files using Base64 encoding
+
+# Function to decrypt text between quotes in files using Base64 decoding
 decrypt_strings() {
   local password="$1"
-  find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" | while IFS= read -r file; do
+  find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
     echo "Decrypting $file"
+    
+    # Create a temporary file to store the results
+    > "$file.tmp"
+    
     while IFS= read -r line; do
-      decrypted=$(echo "$line" | sed -E "s/(['\"])([A-Za-z0-9+/=]+)(\1)/\1$(echo -n \2 | openssl enc -aes-256-cbc -d -a -pass pass:$password)\3/g")
-      echo "$decrypted" >> "$file.tmp"
+      # Decrypt text inside single quotes
+      decrypted_line=$(echo "$line" | sed -E "s/'([A-Za-z0-9+/=]+)'/'$(echo -n \1 | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)'/")
+      
+      # Decrypt text inside double quotes
+      decrypted_line=$(echo "$decrypted_line" | sed -E 's/"([A-Za-z0-9+/=]+)"/"$(echo -n \1 | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)"/')
+      
+      # Write the decrypted line to the temporary file
+      echo "$decrypted_line" >> "$file.tmp"
     done < "$file"
+    
+    # Replace the original file with the decrypted content
     mv "$file.tmp" "$file"
   done
 }
+
 
 # Parse command-line arguments
 commit_message="Encrypted strings in files"
@@ -78,4 +103,3 @@ else
 fi
 
 echo "Operation completed."
-
