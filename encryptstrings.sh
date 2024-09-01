@@ -2,18 +2,23 @@
 
 echo "Script started"
 
+# Function to encrypt JSON files using jsoncrypt
 encrypt_strings() {
   local password="$1"
-  find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
+  find . -type f -name "*.json" -not -path '*/\.git/*' -not -name "$(basename "$0")" | while IFS= read -r file; do
     echo "Encrypting $file"
-    
-    # Create a temporary file to store the results
-    > "$file.tmp"
-  
-    # Encrypt text inside single quotes
-    
-    # Replace the original file with the encrypted content
-    mv "$file.tmp" "$file"
+    python3 -c "
+import sys
+from jsoncrypt import Encrypt
+
+filename = '$file'
+password = '$password'
+
+if Encrypt.jsonfile(filename, save_file=True, password=password):
+    print(f'File {filename} was successfully encrypted and has been saved!')
+else:
+    print(f'Failed to encrypt file {filename}')
+"
   done
 }
 
