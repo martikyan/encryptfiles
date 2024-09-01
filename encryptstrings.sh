@@ -2,7 +2,6 @@
 
 echo "Script started"
 
-# Function to encrypt text between quotes in files using Base64 encoding
 encrypt_strings() {
   local password="$1"
   find . -type f -not -path '*/\.git/*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
@@ -10,17 +9,8 @@ encrypt_strings() {
     
     # Create a temporary file to store the results
     > "$file.tmp"
-    
-    while IFS= read -r line; do
-      # Encrypt text inside single quotes
-      encrypted_line=$(echo "$line" | sed -E "s/'([^']*)'/'$(echo -n \1 | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2)'/")
-      
-      # Encrypt text inside double quotes
-      encrypted_line=$(echo "$encrypted_line" | sed -E 's/"([^"]*)"/"$(echo -n \1 | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2)"/')
-      
-      # Write the encrypted line to the temporary file
-      echo "$encrypted_line" >> "$file.tmp"
-    done < "$file"
+  
+    # Encrypt text inside single quotes
     
     # Replace the original file with the encrypted content
     mv "$file.tmp" "$file"

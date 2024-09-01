@@ -1,0 +1,3 @@
+[submodule "jsoncrypt"]
+	path = jsoncrypt
+	url = https://github.com/rcastrucci/jsoncrypt.git
