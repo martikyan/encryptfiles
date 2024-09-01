@@ -22,6 +22,26 @@ else:
   done
 }
 
+# Function to decrypt JSON files using jsoncrypt
+decrypt_strings() {
+  local password="$1"
+  find . -type f -name "*.json" -not -path '*/\.git/*' -not -name "$(basename "$0")" | while IFS= read -r file; do
+    echo "Decrypting $file"
+    python3 -c "
+import sys
+from jsoncrypt import Decrypt
+
+filename = '$file'
+password = '$password'
+
+if Decrypt.jsonfile(filename, save_file=True, password=password):
+    print(f'File {filename} was successfully decrypted and has been saved!')
+else:
+    print(f'File {filename} is not encrypted or it was modified')
+"
+  done
+}
+
 
 # Function to decrypt text between quotes in files using Base64 decoding
 decrypt_strings() {
