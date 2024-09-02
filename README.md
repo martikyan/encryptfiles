@@ -45,3 +45,10 @@ Run the setup script to make the command globally accessible:
 ---
 
 Now you can use `encryptfiles` from any directory for quick file encryption and decryption.
+
+## Todo list
+- Create an option to provide directory as parameter
+- Create password confirmation
+- Fix options and help
+- Protect against pushes of unencrypted files
+- Add an option to revert encryption locally after pushing
