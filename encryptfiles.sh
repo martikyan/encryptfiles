@@ -6,7 +6,9 @@ echo "Script started"
 # Function to encrypt files
 encrypt_files() {
   local password=$1
-  for file in *; do
+  local dir=${2:-.}  # Default to current directory if no directory is provided
+  echo "Encrypting files in directory: $dir"
+  for file in "$dir"/*; do
     if [[ -f $file ]] && ! grep -q "#@@skip" "$file" && [[ $file != .* ]]; then
       echo "Encrypting $file"
       tmp_file=$(mktemp)
@@ -21,7 +23,9 @@ encrypt_files() {
 # Function to decrypt files
 decrypt_files() {
   local password=$1
-  for file in *; do
+  local dir=${2:-.}  # Default to current directory if no directory is provided
+  echo "Decrypting files in directory: $dir"
+  for file in "$dir"/*; do
     if [[ -f $file ]] && ! grep -q "#@@skip" "$file" && [[ $file != .* ]]; then
       echo "Decrypting $file"
       tmp_file=$(mktemp)
@@ -37,21 +41,37 @@ decrypt_files() {
 commit_message="Encrypted strings in files"
 decrypt_only=false
 no_git=false
-while getopts "m:dn" opt; do
+dir_to_process="."
+while getopts "m:dnd:" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
     d) decrypt_only=true ;;
     n) no_git=true ;;
-    *) echo "Usage: $0 [-m commit_message] [-d] [-n]"; exit 1 ;;
+    d) dir_to_process="$OPTARG" ;;
+    *) echo "Usage: $0 [-m commit_message] [-d] [-n] [-d directory]"; exit 1 ;;
   esac
 done
 
+# Print the directory to be processed
+echo "Directory to be processed: $dir_to_process"
+
 # Prompt for the password without echoing it
-echo "Enter the password for encryption/decryption:"
-read -s password
+if $decrypt_only; then
+  echo "Enter the password for decryption:"
+  read -s password
+else
+  echo "Enter the password for encryption:"
+  read -s password
+  echo "Confirm the password:"
+  read -s password_confirm
+  if [ "$password" != "$password_confirm" ]; then
+    echo "Passwords do not match. Exiting."
+    exit 1
+  fi
+fi
 
 # If no_git is false, check if the current directory is a Git repository
-if ! $no_git; then
+if ! $no_git && ! $decrypt_only; then
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
     echo "No git repository found. Initializing..."
     git init
@@ -60,9 +80,9 @@ fi
 
 echo "Processing files"
 if $decrypt_only; then
-  decrypt_files "$password"
+  decrypt_files "$password" "$dir_to_process"
 else
-  encrypt_files "$password"
+  encrypt_files "$password" "$dir_to_process"
 
   if ! $no_git; then
     # Add changes to git
