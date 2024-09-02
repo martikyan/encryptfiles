@@ -3,56 +3,30 @@
 echo "Script started"
 
 # Function to encrypt all lines in files, grouping 5 lines at a time
-encrypt_strings() {
+encrypt_files() {
   local password="$1"
-  find . -type f -not -path '*/\.git*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
+  find . -type f -not -path '*/\.git*' -not -name "$(basename "$0")" -not -name '*.sh' -not -name '*.tmp' | while IFS= read -r file; do
     echo "Encrypting $file"
-    
-    # Create a temporary file to store the results
-    > "$file.tmp"
-    
-    buffer=""
-    line_count=0
-
-    while IFS= read -r line; do
-      buffer+="$line"$'\n'
-      ((line_count++))
-
-      if (( line_count == 5 )); then
-        encrypted_text=$(echo -n "$buffer" | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2 | tr -d '\n')
-        echo "$encrypted_text" >> "$file.tmp"
-        buffer=""
-        line_count=0
-      fi
-    done < "$file"
-
-    # Encrypt any remaining lines in the buffer
-    if [ -n "$buffer" ]; then
-      encrypted_text=$(echo -n "$buffer" | openssl enc -aes-256-cbc -a -salt -pass pass:$password -pbkdf2 | tr -d '\n')
-      echo "$encrypted_text" >> "$file.tmp"
+    openssl enc -aes-256-cbc -salt -in "$file" -out "$file.enc" -k "$password"
+    if [ $? -eq 0 ]; then
+      rm "$file"
+    else
+      echo "Failed to encrypt $file"
     fi
-    
-    # Replace the original file with the encrypted content
-    mv "$file.tmp" "$file"
   done
 }
 
 # Function to decrypt all lines in files, grouping 5 lines at a time
-decrypt_strings() {
+decrypt_files() {
   local password="$1"
-  find . -type f -not -path '*/\.git*' -not -name "$(basename "$0")" -not -name '*.sh' | while IFS= read -r file; do
+  find . -type f -name '*.enc' | while IFS= read -r file; do
     echo "Decrypting $file"
-    
-    # Create a temporary file to store the results
-    > "$file.tmp"
-    
-    while IFS= read -r line; do
-      decrypted_text=$(echo -n "$line" | openssl enc -aes-256-cbc -d -a -pass pass:$password -pbkdf2)
-      echo "$decrypted_text" >> "$file.tmp"
-    done < "$file"
-    
-    # Replace the original file with the decrypted content
-    mv "$file.tmp" "$file"
+    openssl enc -d -aes-256-cbc -in "$file" -out "${file%.enc}" -k "$password"
+    if [ $? -eq 0 ]; then
+      rm "$file"
+    else
+      echo "Failed to decrypt $file"
+    fi
   done
 }
 
@@ -60,7 +34,7 @@ decrypt_strings() {
 commit_message="Encrypted strings in files"
 decrypt_only=false
 no_git=false
-while getopts "m:d:n" opt; do
+while getopts "m:dn" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
     d) decrypt_only=true ;;
