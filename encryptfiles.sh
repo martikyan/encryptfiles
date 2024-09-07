@@ -7,13 +7,23 @@ echo "Script started"
 encrypt_files() {
   local password=$1
   for file in *; do
-    if [[ -f $file ]] && ! grep -q "#@@skip" "$file" && [[ $file != .* ]]; then
-      echo "Encrypting $file"
-      tmp_file=$(mktemp)
-      openssl enc -aes-256-cbc -salt -pbkdf2 -in "$file" -out "$tmp_file" -k "$password"
-      mv "$tmp_file" "$file"
+    if [[ -f $file ]]; then
+      if grep -q "#@@skip" "$file"; then
+        echo "Skipping $file (reason: #@@skip tag found)"
+      elif [[ $(basename "$file") == .* && $(basename "$file") != "." && $(basename "$file") != ".." ]]; then
+        echo "Skipping $file (reason: hidden file)"
+      else
+        echo "Encrypting $file"
+        tmp_file=$(mktemp)
+        openssl enc -aes-256-cbc -salt -pbkdf2 -in "$file" -out "$tmp_file" -k "$password"
+        if [[ $? -ne 0 ]]; then
+          echo "Error occurred during encryption. Aborting."
+          exit 1
+        fi
+        mv "$tmp_file" "$file"
+      fi
     else
-      echo "Skipping $file"
+      echo "Skipping $file (reason: not a regular file)"
     fi
   done
 }
@@ -22,13 +32,23 @@ encrypt_files() {
 decrypt_files() {
   local password=$1
   for file in *; do
-    if [[ -f $file ]] && ! grep -q "#@@skip" "$file" && [[ $file != .* ]]; then
-      echo "Decrypting $file"
-      tmp_file=$(mktemp)
-      openssl enc -aes-256-cbc -d -salt -pbkdf2 -in "$file" -out "$tmp_file" -k "$password"
-      mv "$tmp_file" "$file"
+    if [[ -f $file ]]; then
+      if grep -q "#@@skip" "$file"; then
+        echo "Skipping $file (reason: #@@skip tag found)"
+      elif [[ $(basename "$file") == .* && $(basename "$file") != "." && $(basename "$file") != ".." ]]; then
+        echo "Skipping $file (reason: hidden file)"
+      else
+        echo "Decrypting $file"
+        tmp_file=$(mktemp)
+        openssl enc -aes-256-cbc -d -salt -pbkdf2 -in "$file" -out "$tmp_file" -k "$password"
+        if [[ $? -ne 0 ]]; then
+          echo "Error occurred during decryption. Aborting."
+          exit 1
+        fi
+        mv "$tmp_file" "$file"
+      fi
     else
-      echo "Skipping $file"
+      echo "Skipping $file (reason: not a regular file)"
     fi
   done
 }
@@ -37,28 +57,50 @@ decrypt_files() {
 commit_message="Encrypted strings in files"
 decrypt_only=false
 no_git=false
-while getopts "m:dn" opt; do
+directory="."
+while getopts "m:dnf:" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
     d) decrypt_only=true ;;
     n) no_git=true ;;
-    *) echo "Usage: $0 [-m commit_message] [-d] [-n]"; exit 1 ;;
+    f) directory="$OPTARG" ;;
+    *) echo "Usage: $0 [-m commit_message] [-d] [-n] [-f directory]"; exit 1 ;;
   esac
 done
 
-# Prompt for the password without echoing it
-echo "Enter the password for encryption/decryption:"
+# Adjust password prompt depending on operation
+if $decrypt_only; then
+  echo "Enter the password for decryption:"
+else
+  echo "Enter the password for encryption:"
+fi
 read -s password
+
+# Only ask for password confirmation if encrypting files
+if ! $decrypt_only; then
+  echo "Re-enter the password for confirmation:"
+  read -s password_confirm
+  if [[ "$password" != "$password_confirm" ]]; then
+    echo "Passwords do not match. Exiting."
+    exit 1
+  fi
+fi
+
+# Save the original directory
+original_dir=$(pwd)
+
+# Change to the target directory
+cd "$directory" || { echo "Failed to change to directory $directory. Exiting."; exit 1; }
 
 # If no_git is false, check if the current directory is a Git repository
 if ! $no_git; then
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-    echo "No git repository found. Initializing..."
+    echo "No git repository found in $directory. Initializing..."
     git init
   fi
 fi
 
-echo "Processing files"
+echo "Processing files in $directory"
 if $decrypt_only; then
   decrypt_files "$password"
 else
@@ -76,5 +118,8 @@ else
     git push &>/dev/null
   fi
 fi
+
+# Return to the original directory
+cd "$original_dir" || { echo "Failed to return to the original directory. Exiting."; exit 1; }
 
 echo "Operation completed."
