@@ -22,6 +22,8 @@ encrypt_files() {
         echo "Skipping $file (reason: #@@skip tag found)"
       elif [[ $(basename "$file") == .* && $(basename "$file") != "." && $(basename "$file") != ".." ]]; then
         echo "Skipping $file (reason: hidden file)"
+      elif [[ $file == *.enc ]]; then
+        echo "Skipping $file (reason: already encrypted)"
       else
         echo "Encrypting $file"
         tmp_file=$(mktemp)
@@ -30,7 +32,8 @@ encrypt_files() {
           echo "Error occurred during encryption. Aborting."
           exit 1
         fi
-        mv "$tmp_file" "$file"
+        mv "$tmp_file" "$file.enc"
+        rm "$file"
       fi
     else
       echo "Skipping $file (reason: not a regular file)"
@@ -41,12 +44,14 @@ encrypt_files() {
 # Function to decrypt files
 decrypt_files() {
   local password=$1
-  for file in *; do
+  for file in *.enc; do
     if [[ -f $file ]]; then
       if grep -q "#@@skip" "$file"; then
         echo "Skipping $file (reason: #@@skip tag found)"
       elif [[ $(basename "$file") == .* && $(basename "$file") != "." && $(basename "$file") != ".." ]]; then
         echo "Skipping $file (reason: hidden file)"
+      elif [[ $file != *.enc ]]; then
+        echo "Skipping $file (reason: not an encrypted file)"
       else
         echo "Decrypting $file"
         tmp_file=$(mktemp)
@@ -55,7 +60,8 @@ decrypt_files() {
           echo "Error occurred during decryption. Aborting."
           exit 1
         fi
-        mv "$tmp_file" "$file"
+        mv "$tmp_file" "${file%.enc}"
+        rm $file
       fi
     else
       echo "Skipping $file (reason: not a regular file)"
@@ -119,13 +125,14 @@ fi
 
 echo "Processing files in $directory"
 if $decrypt_only; then
+  protect_git
   decrypt_files "$password"
 else
   encrypt_files "$password"
   unprotect_git
   if ! $no_git; then
     # Add changes to git
-    git add . &>/dev/null
+    git add ':/*.enc' &>/dev/null
 
     # Commit changes with the provided or default message
     git commit -m "$commit_message"
@@ -135,8 +142,6 @@ else
     git push
   fi
 fi
-
-protect_git
 
 # Return to the original directory
 cd "$original_dir" || { echo "Failed to return to the original directory. Exiting."; exit 1; }
