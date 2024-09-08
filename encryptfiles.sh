@@ -64,17 +64,24 @@ decrypt_files() {
 }
 
 # Parse command-line arguments
-commit_message="Encrypted strings in files"
+commit_message="Encrypt files automatically"
 decrypt_only=false
 no_git=false
 directory="."
+
+# Check if the first argument is a directory
+if [ -d "$1" ]; then
+  directory="$1"
+  shift
+fi
+
 while getopts "m:dnf:" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
     d) decrypt_only=true ;;
     n) no_git=true ;;
     f) directory="$OPTARG" ;;
-    *) echo "Usage: $0 [-m commit_message] [-d] [-n] [-f directory]"; exit 1 ;;
+    *) echo "Usage: $0 [directory] [-m commit_message] [-d] [-n] [-f directory]"; exit 1 ;;
   esac
 done
 
