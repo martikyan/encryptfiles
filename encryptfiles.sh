@@ -3,6 +3,16 @@
 
 echo "Script started"
 
+protect_git() {
+  echo "Protecting .git directory"
+  mv .git .git.bak &>/dev/null || echo ".git directory not found"
+}
+
+unprotect_git() {
+  echo "Restoring .git directory"
+  mv .git.bak .git &>/dev/null || echo ".git.bak directory not found"
+}
+
 # Function to encrypt files
 encrypt_files() {
   local password=$1
@@ -95,8 +105,8 @@ cd "$directory" || { echo "Failed to change to directory $directory. Exiting."; 
 # If no_git is false, check if the current directory is a Git repository
 if ! $no_git; then
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-    echo "No git repository found in $directory. Initializing..."
-    git init
+    echo "No git repository found in $directory. Skipping git operations."
+    no_git=true
   fi
 fi
 
@@ -105,7 +115,7 @@ if $decrypt_only; then
   decrypt_files "$password"
 else
   encrypt_files "$password"
-
+  unprotect_git
   if ! $no_git; then
     # Add changes to git
     git add . &>/dev/null
@@ -115,9 +125,11 @@ else
 
     # Push changes to the remote repository
     echo "Pushing changes to the remote repository"
-    git push &>/dev/null
+    git push
   fi
 fi
+
+protect_git
 
 # Return to the original directory
 cd "$original_dir" || { echo "Failed to return to the original directory. Exiting."; exit 1; }
