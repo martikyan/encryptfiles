@@ -117,7 +117,7 @@ cd "$directory" || { echo "Failed to change to directory $directory. Exiting."; 
 
 # If no_git is false, check if the current directory is a Git repository
 if ! $no_git; then
-  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  if [[ ! -d .git && ! -d .git.bak ]]; then
     echo "No git repository found in $directory. Skipping git operations."
     no_git=true
   fi
