@@ -134,7 +134,9 @@ if [[ -z "$password" ]]; then
   fi
   # double hash the password
   password_hash=$(double_hash $password)
-  echo $password_hash > .password
+
+  if ! $decrypt_only; then
+    echo $password_hash > .password
   password=$password_hash
 fi
 
