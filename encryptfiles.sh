@@ -13,6 +13,19 @@ unprotect_git() {
   mv .git.bak .git &>/dev/null || echo ".git.bak directory not found"
 }
 
+get_file_password() {
+  if [[ -f .password ]]; then
+    password=$(cat .password)
+    echo $password
+  fi
+}
+
+double_hash() {
+  # double hash the password with a salt 'salt'
+  password_hash=$(echo -n "salt$1" | sha256sum | awk '{print $1}' | sha256sum | awk '{print $1}')
+  echo $password_hash
+}
+
 # Function to encrypt files
 encrypt_files() {
   local password=$1
@@ -81,6 +94,7 @@ if [ -d "$1" ]; then
   shift
 fi
 
+echo "Parsing command-line arguments"
 while getopts "m:dnf:" opt; do
   case $opt in
     m) commit_message="$OPTARG" ;;
@@ -91,29 +105,38 @@ while getopts "m:dnf:" opt; do
   esac
 done
 
-# Adjust password prompt depending on operation
-if $decrypt_only; then
-  echo "Enter the password for decryption:"
-else
-  echo "Enter the password for encryption:"
-fi
-read -s password
-
-# Only ask for password confirmation if encrypting files
-if ! $decrypt_only; then
-  echo "Re-enter the password for confirmation:"
-  read -s password_confirm
-  if [[ "$password" != "$password_confirm" ]]; then
-    echo "Passwords do not match. Exiting."
-    exit 1
-  fi
-fi
-
 # Save the original directory
 original_dir=$(pwd)
 
 # Change to the target directory
 cd "$directory" || { echo "Failed to change to directory $directory. Exiting."; exit 1; }
+
+# get_input_password get_file_password double_hash
+
+password=$(get_file_password)
+if [[ -z "$password" ]]; then
+  # if file password is empty, get input password
+  if $decrypt_only; then
+    echo "Enter the password for decryption:"
+  else
+    echo "Enter the password for encryption:"
+  fi
+  read -s password
+  
+  # Only ask for password confirmation if encrypting files
+  if ! $decrypt_only; then
+    echo "Re-enter the password for confirmation:"
+    read -s password_confirm
+    if [[ "$password" != "$password_confirm" ]]; then
+      echo "Passwords do not match. Exiting."
+      exit 1
+    fi
+  fi
+  # double hash the password
+  password_hash=$(double_hash $password)
+  echo $password_hash > .password
+  password=$password_hash
+fi
 
 # If no_git is false, check if the current directory is a Git repository
 if ! $no_git; then
