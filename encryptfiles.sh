@@ -137,6 +137,7 @@ if [[ -z "$password" ]]; then
 
   if ! $decrypt_only; then
     echo $password_hash > .password
+  fi
   password=$password_hash
 fi
 
