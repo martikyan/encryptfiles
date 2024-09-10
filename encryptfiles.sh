@@ -90,8 +90,14 @@ directory="."
 
 # Check if the first argument is a directory
 if [ -d "$1" ]; then
+  echo "The first parameter is the directory"
   directory="$1"
   shift
+fi
+
+if [ -d "${@: -1}" ]; then
+  echo "The last parameter is the directory"
+  directory="${@: -1}"
 fi
 
 echo "Parsing command-line arguments"
@@ -110,8 +116,7 @@ original_dir=$(pwd)
 
 # Change to the target directory
 cd "$directory" || { echo "Failed to change to directory $directory. Exiting."; exit 1; }
-
-# get_input_password get_file_password double_hash
+echo "Changed directory to `pwd`"
 
 password=$(get_file_password)
 if [[ -z "$password" ]]; then
